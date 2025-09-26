@@ -19,29 +19,27 @@ func NewRobotService(store *repository.Store) *RobotService {
 func (s *RobotService) GenerateDeliveryPlan(ctx context.Context, robotID string, capacity int) (*model.DeliveryPlan, error) {
 	var plan model.DeliveryPlan
 
-	err := utils.WithTimeout(ctx, func(ctx context.Context) error {
-		return s.store.ExecTx(ctx, func(txStore *repository.Store) error {
-			orders, err := txStore.OrderRepo.GetShippingOrders(ctx)
-			if err != nil {
-				return err
+	err := s.store.ExecTx(ctx, func(txStore *repository.Store) error {
+		orders, err := txStore.OrderRepo.GetShippingOrders(ctx)
+		if err != nil {
+			return err
+		}
+		plan, err = selectOrdersForDelivery(ctx, orders, robotID, capacity)
+		if err != nil {
+			return err
+		}
+		if len(plan.Orders) > 0 {
+			orderIDs := make([]int64, len(plan.Orders))
+			for i, order := range plan.Orders {
+				orderIDs[i] = order.OrderID
 			}
-			plan, err = selectOrdersForDelivery(ctx, orders, robotID, capacity)
-			if err != nil {
-				return err
-			}
-			if len(plan.Orders) > 0 {
-				orderIDs := make([]int64, len(plan.Orders))
-				for i, order := range plan.Orders {
-					orderIDs[i] = order.OrderID
-				}
 
-				if err := txStore.OrderRepo.UpdateStatuses(ctx, orderIDs, "delivering"); err != nil {
-					return err
-				}
-				log.Printf("Updated status to 'delivering' for %d orders", len(orderIDs))
+			if err := txStore.OrderRepo.UpdateStatuses(ctx, orderIDs, "delivering"); err != nil {
+				return err
 			}
-			return nil
-		})
+			log.Printf("Updated status to 'delivering' for %d orders", len(orderIDs))
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -57,76 +55,43 @@ func (s *RobotService) UpdateOrderStatus(ctx context.Context, orderID int64, new
 
 func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID string, robotCapacity int) (model.DeliveryPlan, error) {
 	n := len(orders)
-	steps := 0
-	checkEvery := 16384
-	canceled := false
 
 	// dp[i][w] = i番目までの品物を使って、重さw以下で実現できる最大価値
 	dp := make([][]int, n+1)
+	prevW := make([][]int, n+1)
+
 	for i := range dp {
 		dp[i] = make([]int, robotCapacity+1)
+		prevW[i] = make([]int, robotCapacity+1)
 	}
 
-Loop:
-	// robotCapacityがそんなに大きくならないのであれば、timeoutのチェックは外のループでやった方がいいかも
-	// 大きくないの基準は、robotCapacityが16384以下とか
-	// ぴったり16384回に1回チェックではなく、16384の倍数を超えたら1回チェックするようにするような修正を加えると良さそう
 	for i := 1; i <= n; i++ {
 		order := orders[i-1]
 		for w := 0; w <= robotCapacity; w++ {
-			// timeoutのチェック
-			steps++
-			if checkEvery > 0 && steps%checkEvery == 0 {
-				select {
-				case <-ctx.Done():
-					canceled = true
-					break Loop
-				default:
-				}
-			}
-
 			// i番目の品物を選ばない場合
 			dp[i][w] = dp[i-1][w]
+			prevW[i][w] = w
 
 			// i番目の品物を選ぶ場合
 			if w >= order.Weight && dp[i][w] < dp[i-1][w-order.Weight]+order.Value {
 				dp[i][w] = dp[i-1][w-order.Weight] + order.Value
+				prevW[i][w] = w - order.Weight
 			}
 		}
 	}
 
-	if canceled {
-		return model.DeliveryPlan{}, ctx.Err()
-	}
-
 	bestValue := dp[n][robotCapacity]
-	useForBest := make([]bool, n+1)
 	var totalWeight int
-
-	// DPテーブルから最適な組み合わせを復元
-	// useForBestを使わずに、bestSetに直接追加していく方法もあるが、appendに伴うメモリ再割り当てが発生する可能性があるため、まずは選ばれた品物を記録しておき、後でまとめてbestSetに追加する方法を採用した
-	// 実際にどっちが速いかはわからない。bestSetに直接追加する方法の方が速い可能性もある。
-	// bestSetに直接追加する場合は、(もとのコードの挙動に合わせるなら)最後に逆順にする必要がある
-	w := robotCapacity
-	for i := n; i > 0; i-- {
-		// i番目の品物が選ばれたか判定
-		order := orders[i-1]
-		// dp[i][w]の値は、dp[i-1][w]とdp[i-1][w-order.Weight]+order.Valueのどちらか大きい方なので、
-		// dp[i][w] != dp[i-1][w]ならi番目の品物が選ばれたことになる
-		if dp[i][w] != dp[i-1][w] {
-			useForBest[i] = true
-			w -= order.Weight
-			totalWeight += order.Weight
-		}
-	}
 	bestSet := make([]model.Order, 0, n)
 
-	index := 0
-	for i := 1; i <= n; i++ {
-		if useForBest[i] {
-			bestSet = append(bestSet, orders[index])
-			index++
+	w := robotCapacity
+	for i := n; i > 0; i-- {
+		order := orders[i-1]
+		if prevW[i][w] == w-order.Weight {
+			bestSet = append(bestSet, order)
+			totalWeight += order.Weight
 		}
+		w = prevW[i][w]
 	}
 
 	return model.DeliveryPlan{
@@ -136,59 +101,3 @@ Loop:
 		Orders:      bestSet,
 	}, nil
 }
-
-// 以下、もとのコードです。
-
-// func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID string, robotCapacity int) (model.DeliveryPlan, error) {
-// 	n := len(orders)
-// 	bestValue := 0
-// 	var bestSet []model.Order
-// 	steps := 0
-// 	checkEvery := 16384
-
-// 	var dfs func(i, curWeight, curValue int, curSet []model.Order) bool
-// 	dfs = func(i, curWeight, curValue int, curSet []model.Order) bool {
-// 		if curWeight > robotCapacity {
-// 			return false
-// 		}
-// 		steps++
-// 		if checkEvery > 0 && steps%checkEvery == 0 {
-// 			select {
-// 			case <-ctx.Done():
-// 				return true
-// 			default:
-// 			}
-// 		}
-// 		if i == n {
-// 			if curValue > bestValue {
-// 				bestValue = curValue
-// 				bestSet = append([]model.Order{}, curSet...)
-// 			}
-// 			return false
-// 		}
-
-// 		if dfs(i+1, curWeight, curValue, curSet) {
-// 			return true
-// 		}
-
-// 		order := orders[i]
-// 		return dfs(i+1, curWeight+order.Weight, curValue+order.Value, append(curSet, order))
-// 	}
-
-// 	canceled := dfs(0, 0, 0, nil)
-// 	if canceled {
-// 		return model.DeliveryPlan{}, ctx.Err()
-// 	}
-
-// 	var totalWeight int
-// 	for _, o := range bestSet {
-// 		totalWeight += o.Weight
-// 	}
-
-// 	return model.DeliveryPlan{
-// 		RobotID:     robotID,
-// 		TotalWeight: totalWeight,
-// 		TotalValue:  bestValue,
-// 		Orders:      bestSet,
-// 	}, nil
-// }
