@@ -4,6 +4,7 @@ import (
 	cache "backend/internal"
 	"backend/internal/model"
 	"context"
+	"strings"
 )
 
 type ProductRepository struct {
@@ -19,24 +20,11 @@ func (r *ProductRepository) ListProducts(ctx context.Context, userID int, req mo
 	var products []model.Product
 
 	if req.Search == "" {
-		cacheKey := req.SortField + "," + req.SortOrder
-		res, err := cache.Cache.Products.Get(ctx, cacheKey)
-
-		if err == nil && res.Found {
-			products = res.Value
-		} else {
-			baseQuery := `
-		SELECT product_id, name, value, weight, image, description
-		FROM products
-	` + " ORDER BY " + req.SortField + " " + req.SortOrder + " , product_id ASC"
-
-			err := r.db.SelectContext(ctx, &products, baseQuery)
-			if err != nil {
-				return nil, 0, err
-			}
-
-			cache.Cache.Products.Set(ctx, cacheKey, products)
+		r, err := cache.Cache.ProductsOrdered.Get(ctx, strings.ToLower(req.SortField+" "+req.SortOrder))
+		if err != nil {
+			return nil, 0, err
 		}
+		products = r.Value
 	} else {
 		baseQuery := `
 		SELECT product_id, name, value, weight, image, description
