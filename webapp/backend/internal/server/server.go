@@ -56,6 +56,8 @@ func NewServer() (*Server, *sqlx.DB, error) {
 			return req.URL.Path != "/api/health"
 		}),
 	))
+	middleware.InitJaegerTracer()
+	r.Use(middleware.JaegerMiddleware())
 	pproteinIntegrate(r)
 
 	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
