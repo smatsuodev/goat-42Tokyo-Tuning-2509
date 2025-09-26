@@ -4,7 +4,7 @@ import (
 	cache "backend/internal"
 	"backend/internal/model"
 	"context"
-	"sort"
+	"strings"
 )
 
 type ProductRepository struct {
@@ -20,50 +20,11 @@ func (r *ProductRepository) ListProducts(ctx context.Context, userID int, req mo
 	var products []model.Product
 
 	if req.Search == "" {
-		products = cache.Cache.Products
-		sort.SliceStable(products, func(i, j int) bool {
-			switch req.SortField {
-			case "description":
-				if req.SortOrder == "DESC" {
-					return products[i].Description > products[j].Description
-				} else {
-					return products[i].Description < products[j].Description
-				}
-			case "image":
-				if req.SortOrder == "DESC" {
-					return products[i].Image > products[j].Image
-				} else {
-					return products[i].Image < products[j].Image
-				}
-			case "name":
-				if req.SortOrder == "DESC" {
-					return products[i].Name > products[j].Name
-				} else {
-					return products[i].Name < products[j].Name
-				}
-			case "productid":
-				if req.SortOrder == "DESC" {
-					return products[i].ProductID > products[j].ProductID
-				} else {
-					return products[i].ProductID < products[j].ProductID
-				}
-			case "value":
-				if req.SortOrder == "DESC" {
-					return products[i].Value > products[j].Value
-				} else {
-					return products[i].Value < products[j].Value
-				}
-			case "weight":
-				if req.SortOrder == "DESC" {
-					return products[i].Weight > products[j].Weight
-				} else {
-					return products[i].Weight < products[j].Weight
-				}
-			default:
-				// todo: 例外処理
-				return true
-			}
-		})
+		r, err := cache.Cache.ProductsOrdered.Get(ctx, strings.ToLower(req.SortField+" "+req.SortOrder))
+		if err != nil {
+			return nil, 0, err
+		}
+		products = r.Value
 	} else {
 		baseQuery := `
 		SELECT product_id, name, value, weight, image, description
