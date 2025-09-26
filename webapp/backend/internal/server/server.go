@@ -11,7 +11,9 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jmoiron/sqlx"
+	"github.com/kaz/pprotein/integration"
 	"github.com/riandyrn/otelchi"
 )
 
@@ -54,6 +56,7 @@ func NewServer() (*Server, *sqlx.DB, error) {
 			return req.URL.Path != "/api/health"
 		}),
 	))
+	pproteinIntegrate(r)
 
 	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -67,6 +70,20 @@ func NewServer() (*Server, *sqlx.DB, error) {
 	s.setupRoutes(authHandler, productHandler, orderHandler, robotHandler, userAuthMW, robotAuthMW)
 
 	return s, dbConn, nil
+}
+
+func pproteinIntegrate(r *chi.Mux) {
+	EnableDebugMode(r)
+	EnableDebugHandler(r)
+}
+
+func EnableDebugHandler(r *chi.Mux) {
+	r.Mount("/debug", integration.NewDebugHandler())
+}
+
+func EnableDebugMode(r *chi.Mux) {
+	r.Use(chiMiddleware.Logger)
+	r.Use(chiMiddleware.Recoverer)
 }
 
 func (s *Server) setupRoutes(

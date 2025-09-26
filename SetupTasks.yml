@@ -263,7 +263,7 @@ tasks:
         [Install]
         WantedBy=multi-user.target
         EOF
-      - sudo systemctl daemon-reload
+      - sudo systemctl daemmiddlewareon-reload
       - sudo systemctl enable --now pprotein-agent
     status:
       - test -f /etc/systemd/system/pprotein.service

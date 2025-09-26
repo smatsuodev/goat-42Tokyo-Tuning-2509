@@ -135,6 +135,8 @@ else
 
     cd worker
     mkdir -p ./scores ./logs
+ 
+    curl http://localhost:9000/api/group/collect
     SCORE=$(docker run --rm \
         --network webapp-network \
         -e TARGET_IP=127.0.0.1 \
