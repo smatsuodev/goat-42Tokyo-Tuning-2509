@@ -104,6 +104,9 @@ Loop:
 	var totalWeight int
 
 	// DPテーブルから最適な組み合わせを復元
+	// useForBestを使わずに、bestSetに直接追加していく方法もあるが、appendに伴うメモリ再割り当てが発生する可能性があるため、まずは選ばれた品物を記録しておき、後でまとめてbestSetに追加する方法を採用した
+	// 実際にどっちが速いかはわからない。bestSetに直接追加する方法の方が速い可能性もある。
+	// bestSetに直接追加する場合は、(もとのコードの挙動に合わせるなら)最後に逆順にする必要がある
 	w := robotCapacity
 	for i := n; i > 0; i-- {
 		// i番目の品物が選ばれたか判定
@@ -133,6 +136,8 @@ Loop:
 		Orders:      bestSet,
 	}, nil
 }
+
+// 以下、もとのコードです。
 
 // func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID string, robotCapacity int) (model.DeliveryPlan, error) {
 // 	n := len(orders)
