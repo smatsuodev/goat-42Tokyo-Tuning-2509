@@ -121,6 +121,8 @@ if [[ $HOSTNAME == ftt2508-* ]]; then
     echo -e "bash get_test_status.sh $JOB_ID"
     echo -e "\n\n===================================================\n\n"
 
+    curl http://localhost:9001/api/group/collect
+
 else
     # ===============================
     # 4. ローカル環境での処理
