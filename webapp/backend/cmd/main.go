@@ -1,6 +1,7 @@
 package main
 
 import (
+	cache "backend/internal"
 	"backend/internal/server"
 	"log"
 )
@@ -13,6 +14,8 @@ func main() {
 	if dbConn != nil {
 		defer dbConn.Close()
 	}
+
+	cache.InitCache()
 
 	srv.Run()
 }
