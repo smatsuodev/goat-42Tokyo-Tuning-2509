@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+# https://taskfile.dev
+version: "3"
+
+vars:
+  # Frequently changed
+  # TODO: UPDATE ME
+  SERVICES: mysql nginx
+
+  # Rarely changed
+  REPO_DIR:
+    sh: find $HOME -maxdepth 2 -name "SetupTasks.yml" -type f -exec dirname {} \; | head -1
+  SRC_DIR: "{{.REPO_DIR}}/webapp/backend"
+
+tasks:
+  ####################
+  #      Deploy      #
+  ####################
+  deploy:
+    desc: Deploy the latest configuration
+    deps:
+      - checkout
+    dir: "{{.REPO_DIR}}"
+    cmds:
+      - ./run.sh
+      # - task: build
+      # - ./assets/distribute_config.sh
+      # - task: restart-all
+      # - task: reload-sysctl
+
+  build:
+    desc: Build the application
+    dir: "{{.SRC_DIR}}"
+    cmds:
+      - make
+
+  ####################
+  #     Utility      #
+  ####################
+  checkout:
+    desc: Checkout and sync with the latest remote branch
+    dir: "{{.REPO_DIR}}"
+    vars:
+      BRANCH: '{{.CLI_ARGS | default "main"}}'
+    cmds:
+      - git fetch --all
+      - git reset --hard origin/{{.BRANCH}}
+      - git switch -C {{.BRANCH}} origin/{{.BRANCH}}
+
+  enable:
+    desc: Enable and start specified services
+    deps: [daemon-reload]
+    cmd: sudo systemctl enable --now {{.CLI_ARGS}}
+
+  disable:
+    desc: Disable and stop specified services
+    deps: [daemon-reload]
+    cmd: sudo systemctl disable --now {{.CLI_ARGS}}
+
+  status:
+    desc: Show status of specified services
+    deps: [daemon-reload]
+    cmd: sudo systemctl status {{.CLI_ARGS}}
+
+  status-all:
+    desc: Show status of all services related to the application
+    deps: [daemon-reload]
+    cmd: sudo systemctl status {{.SERVICES}}
+
+  restart:
+    desc: Restart specified services
+    deps: [daemon-reload]
+    cmd: sudo systemctl restart {{.CLI_ARGS}}
+
+  restart-all:
+    desc: Restart all services related to the application
+    deps: [daemon-reload]
+    cmd: sudo systemctl restart {{.SERVICES}}
+
+  reload-sysctl:
+    desc: Reload sysctl configuration
+    cmd: sudo sysctl -p
+
+  ####################
+  #     Internal     #
+  ####################
+  daemon-reload:
+    internal: true
+    cmd: sudo systemctl daemon-reload
