@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
@@ -42,6 +43,12 @@ func JaegerMiddleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tracer := otel.Tracer("webapp")
 			ctx, span := tracer.Start(r.Context(), r.URL.Path)
+
+			span.SetAttributes(
+				attribute.String("http.request.path", r.URL.RawPath),
+				attribute.String("http.request.query", r.URL.RawQuery),
+			)
+
 			defer span.End()
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
