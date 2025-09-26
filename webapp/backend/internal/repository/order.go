@@ -33,6 +33,32 @@ func (r *OrderRepository) Create(ctx context.Context, order *model.Order) (strin
 	return fmt.Sprintf("%d", id), nil
 }
 
+func (r *OrderRepository) CreateMany(ctx context.Context, orders []*model.Order) ([]string, error) {
+	var idStart int64
+
+	err := r.db.GetContext(ctx, &idStart, "SELECT `AUTO_INCREMENT` FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'orders'")
+	if err != nil {
+		return nil, err
+	}
+
+	query := `INSERT INTO orders (user_id, product_id, shipped_status, created_at) VALUES (:user_id, :product_id, 'shipping', NOW())`
+	result, err := r.db.NamedExecContext(ctx, query, orders)
+	if err != nil {
+		return nil, err
+	}
+
+	idLast, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, idLast-idStart+1)
+	for i := idStart; i <= idLast; i++ {
+		ids[i-idStart] = fmt.Sprintf("%d", i)
+	}
+	return ids, nil
+}
+
 // 複数の注文IDのステータスを一括で更新
 // 主に配送ロボットが注文を引き受けた際に一括更新をするために使用
 func (r *OrderRepository) UpdateStatuses(ctx context.Context, orderIDs []int64, newStatus string) error {
