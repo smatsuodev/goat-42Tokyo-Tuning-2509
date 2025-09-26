@@ -2,20 +2,25 @@ package cache
 
 import (
 	"backend/internal/model"
-	"backend/internal/utils"
+	"log"
+	"sort"
 
-	"github.com/samber/lo"
+	"github.com/jmoiron/sqlx"
 )
 
 type cache struct {
-	Products utils.Cache[string, []model.Product]
+	Products []model.Product
 }
 
 var Cache cache
 
-func InitCache() {
-	Cache = cache{
-		Products: lo.Must(utils.NewInMemoryLRUCache[string, []model.Product](30000)),
+func InitCache(dbConn *sqlx.DB) {
+	Cache = cache{}
+	err := dbConn.Select(&Cache.Products, "SELECT * FROM products")
+	if err != nil {
+		log.Fatal("Failed to get products")
 	}
-
+	sort.SliceStable(Cache.Products, func(i, j int) bool {
+		return Cache.Products[i].ProductID < Cache.Products[j].ProductID
+	})
 }
