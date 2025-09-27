@@ -36,6 +36,7 @@ func (r *OrderRepository) Create(ctx context.Context, order *model.Order) (strin
 func (r *OrderRepository) CreateMany(ctx context.Context, orders []*model.Order) ([]string, error) {
 	var idStart int64
 
+	// TODO: トランザクション貼らないとまずいかも
 	err := r.db.GetContext(ctx, &idStart, "SELECT `AUTO_INCREMENT` FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'orders'")
 	if err != nil {
 		return nil, err

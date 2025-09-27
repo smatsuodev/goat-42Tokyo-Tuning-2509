@@ -19,37 +19,28 @@ func NewProductService(store *repository.Store) *ProductService {
 func (s *ProductService) CreateOrders(ctx context.Context, userID int, items []model.RequestItem) ([]string, error) {
 	var insertedOrderIDs []string
 
-	err := s.store.ExecTx(ctx, func(txStore *repository.Store) error {
-		orders := make([]*model.Order, 0)
+	orders := make([]*model.Order, 0)
 
-		for _, item := range items {
-			if item.Quantity > 0 {
-				for i := 0; i < item.Quantity; i++ {
-					order := &model.Order{
-						UserID:    userID,
-						ProductID: item.ProductID,
-					}
-					orders = append(orders, order)
+	for _, item := range items {
+		if item.Quantity > 0 {
+			for i := 0; i < item.Quantity; i++ {
+				order := &model.Order{
+					UserID:    userID,
+					ProductID: item.ProductID,
 				}
+				orders = append(orders, order)
 			}
 		}
+	}
 
-		if len(orders) == 0 {
-			return nil
-		}
-
-		ids, err := txStore.OrderRepo.CreateMany(ctx, orders)
+	if len(orders) != 0 {
+		ids, err := s.store.OrderRepo.CreateMany(ctx, orders)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		insertedOrderIDs = ids
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
 	}
+
 	log.Printf("Created %d orders for user %d", len(insertedOrderIDs), userID)
 	return insertedOrderIDs, nil
 }
