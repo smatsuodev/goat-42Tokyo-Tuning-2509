@@ -14,7 +14,7 @@ type SessionRepository struct {
 }
 
 func NewSessionRepository(db DBTX) *SessionRepository {
-	go bulkInsertIsuCondition()
+	go bulkInsertSession(db)
 	return &SessionRepository{db: db}
 }
 
@@ -26,7 +26,7 @@ type Session struct {
 
 var sessionCh = make(chan *Session, 1200)
 
-func bulkInsertIsuCondition(db DBTX) {
+func bulkInsertSession(db DBTX) {
 	var values [1200]*Session
 	ticker := time.NewTicker(10 * time.Second)
 	i := 0
