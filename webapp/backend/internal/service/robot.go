@@ -8,6 +8,10 @@ import (
 	"log"
 )
 
+const (
+	smallProblemThreshold = 20000
+)
+
 type RobotService struct {
 	store *repository.Store
 }
@@ -70,6 +74,7 @@ func (s *RobotService) HasShippingOrders(ctx context.Context) (bool, error) {
 }
 
 func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID string, robotCapacity int) (model.DeliveryPlan, error) {
+	_ = ctx
 	prunedOrders := make([]model.Order, 0, len(orders))
 	for _, order := range orders {
 		if order.Weight <= robotCapacity {
@@ -122,6 +127,10 @@ func findBestSetRecursive(orders []model.Order, capacity int) []model.Order {
 		return []model.Order{}
 	}
 
+	if n*capacity <= smallProblemThreshold {
+		return solveKnapsackIterative(orders, capacity)
+	}
+
 	// 1. 分割
 	mid := n / 2
 	firstHalf := orders[:mid]
@@ -149,6 +158,46 @@ func findBestSetRecursive(orders []model.Order, capacity int) []model.Order {
 	solution2 := findBestSetRecursive(secondHalf, capacity-wSplit)
 
 	return append(solution1, solution2...)
+}
+
+func solveKnapsackIterative(orders []model.Order, capacity int) []model.Order {
+	n := len(orders)
+	if n == 0 || capacity <= 0 {
+		return []model.Order{}
+	}
+
+	dp := make([][]int, n+1)
+	for i := range dp {
+		dp[i] = make([]int, capacity+1)
+	}
+
+	for i := 1; i <= n; i++ {
+		order := orders[i-1]
+		for w := 0; w <= capacity; w++ {
+			dp[i][w] = dp[i-1][w]
+			if order.Weight <= w {
+				candidate := dp[i-1][w-order.Weight] + order.Value
+				if candidate > dp[i][w] {
+					dp[i][w] = candidate
+				}
+			}
+		}
+	}
+
+	result := make([]model.Order, 0)
+	w := capacity
+	for i := n; i > 0 && w >= 0; i-- {
+		if dp[i][w] != dp[i-1][w] {
+			order := orders[i-1]
+			result = append(result, order)
+			w -= order.Weight
+		}
+	}
+
+	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
+		result[i], result[j] = result[j], result[i]
+	}
+	return result
 }
 
 // 空間計算量 O(capacity) で最大価値の配列を計算するヘルパー関数
