@@ -24,6 +24,7 @@ type cache struct {
 }
 
 var Cache cache
+var CacheLock sync.Mutex
 
 func InitCache(dbConn *sqlx.DB) {
 	var tmp int
@@ -33,9 +34,11 @@ func InitCache(dbConn *sqlx.DB) {
 		if err == nil {
 			break
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 	}
 
+	CacheLock.Lock()
+	defer CacheLock.Unlock()
 	Cache = cache{
 		ProductsById:    lo.Must(utils.NewInMemoryLRUCache[int, model.Product](300000)),
 		ProductsOrdered: lo.Must(utils.NewInMemoryLRUCache[string, []model.Product](300000)),

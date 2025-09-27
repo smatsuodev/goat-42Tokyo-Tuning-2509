@@ -6,3 +6,5 @@ CREATE INDEX idx_user_name ON users (user_name);
 CREATE TABLE cache (
     target VARCHAR(255) PRIMARY KEY,
 );
+
+SELECT SLEEP(30);
