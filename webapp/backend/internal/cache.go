@@ -3,19 +3,17 @@ package cache
 import (
 	"backend/internal/model"
 	"backend/internal/utils"
-	"context"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/samber/lo"
 )
 
 type cache struct {
 	// Products               []model.Product
 	ProductsCnt            int
-	ProductsById           utils.Cache[int, model.Product]
+	ProductsById           map[int]*model.Product
 	ProductsOrdered        utils.Cache[string, []model.Product]
 	ShippingOrderProductId struct {
 		Values map[int64]int
@@ -27,7 +25,6 @@ var Cache cache
 
 func InitCache(dbConn *sqlx.DB) {
 	var tmp int
-	ctx := context.TODO()
 
 	for {
 		err := dbConn.Get(&tmp, "SELECT COUNT(*) FROM cache")
@@ -37,24 +34,24 @@ func InitCache(dbConn *sqlx.DB) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	log.Println("InitCache start")
-	Cache = cache{
-		ProductsById:    lo.Must(utils.NewInMemoryLRUCache[int, model.Product](300000)),
-		ProductsOrdered: lo.Must(utils.NewInMemoryLRUCache[string, []model.Product](300000)),
-		ShippingOrderProductId: struct {
-			Values map[int64]int
-			Mu     sync.RWMutex
-		}{Values: make(map[int64]int)},
-	}
-
 	var products []model.Product
 	err := dbConn.Select(&products, "SELECT * FROM products")
 	if err != nil {
 		log.Fatal("Failed to get products")
 	}
 	Cache.ProductsCnt = len(products)
+
+	log.Println("InitCache start")
+	Cache = cache{
+		ProductsById: make(map[int]*model.Product, len(products)),
+		ShippingOrderProductId: struct {
+			Values map[int64]int
+			Mu     sync.RWMutex
+		}{Values: make(map[int64]int)},
+	}
+
 	for _, p := range products {
-		Cache.ProductsById.Set(ctx, p.ProductID, p)
+		Cache.ProductsById[p.ProductID] = &p
 	}
 
 	var orders []model.Order

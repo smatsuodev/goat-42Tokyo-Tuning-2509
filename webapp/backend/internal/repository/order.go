@@ -114,14 +114,14 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
 	}()
 	var err error
 	orders := lo.MapToSlice(cache.Cache.ShippingOrderProductId.Values, func(k int64, v int) model.Order {
-		p, _ := cache.Cache.ProductsById.Get(ctx, v)
-		if !p.Found {
+		p := cache.Cache.ProductsById[v]
+		if p == nil {
 			err = errors.New("not found")
 		}
 		return model.Order{
 			OrderID: k,
-			Weight:  p.Value.Weight,
-			Value:   p.Value.Value,
+			Weight:  p.Weight,
+			Value:   p.Value,
 		}
 	})
 
@@ -156,14 +156,11 @@ func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.
 
 	var orders []model.Order
 	for _, o := range ordersRaw {
-		p, err := cache.Cache.ProductsById.Get(ctx, o.ProductID)
-		if err != nil {
-			return nil, 0, err
-		}
-		if !p.Found {
+		p := cache.Cache.ProductsById[o.ProductID]
+		if p == nil {
 			return nil, 0, errors.New("product not found")
 		}
-		productName := p.Value.Name
+		productName := p.Name
 		if req.Search != "" {
 			if req.Type == "prefix" {
 				if !strings.HasPrefix(productName, req.Search) {
