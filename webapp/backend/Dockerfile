@@ -10,7 +10,7 @@ COPY . .
 
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -o /usr/local/bin/server ./cmd
+    CGO_ENABLED=1 go build -o /usr/local/bin/server ./cmd
 
 FROM 42tokyo2508.azurecr.io/backend:base AS production
 WORKDIR /usr/local/bin

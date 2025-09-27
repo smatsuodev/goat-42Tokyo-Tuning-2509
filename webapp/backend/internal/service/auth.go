@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"backend/internal/repository"
+	"backend/internal/utils"
 
 	"go.opentelemetry.io/otel"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -43,7 +43,7 @@ func (s *AuthService) Login(ctx context.Context, userName, password string) (str
 
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+	err = utils.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
 	if err != nil {
 		log.Printf("[Login] パスワード検証失敗: %v", err)
 		span.RecordError(err)
