@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 
@@ -113,18 +112,12 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
 	defer func() {
 		cache.Cache.ShippingOrderProductId.Mu.Unlock()
 	}()
-	if !cache.Cache.ShippingOrderProductId.IsInit {
-		var orders []model.Order
-		if err := r.db.SelectContext(ctx, &orders, "SELECT * FROM orders WHERE shipped_status = 'shipping' "); err != nil {
-			log.Fatalf("Failed to get shipping orders: %v", err)
-		}
-		for _, o := range orders {
-			cache.Cache.ShippingOrderProductId.Values[o.OrderID] = o.ProductID
-		}
-		cache.Cache.ShippingOrderProductId.IsInit = true
-	}
+	var err error
 	orders := lo.MapToSlice(cache.Cache.ShippingOrderProductId.Values, func(k int64, v int) model.Order {
 		p, _ := cache.Cache.ProductsById.Get(ctx, v)
+		if !p.Found {
+			err = errors.New("not found")
+		}
 		return model.Order{
 			OrderID: k,
 			Weight:  p.Value.Weight,
@@ -132,23 +125,13 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
 		}
 	})
 
-	return orders, nil
+	return orders, err
 }
 
 // 配送対象となる(shipping)注文の件数を取得
 func (r *OrderRepository) CountShippingOrders(ctx context.Context) (int, error) {
 	cache.Cache.ShippingOrderProductId.Mu.Lock()
 	defer cache.Cache.ShippingOrderProductId.Mu.Unlock()
-	if !cache.Cache.ShippingOrderProductId.IsInit {
-		var orders []model.Order
-		if err := r.db.SelectContext(ctx, &orders, "SELECT * FROM orders WHERE shipped_status = 'shipping' "); err != nil {
-			log.Fatalf("Failed to get shipping orders: %v", err)
-		}
-		for _, o := range orders {
-			cache.Cache.ShippingOrderProductId.Values[o.OrderID] = o.ProductID
-		}
-		cache.Cache.ShippingOrderProductId.IsInit = true
-	}
 	return len(cache.Cache.ShippingOrderProductId.Values), nil
 }
 

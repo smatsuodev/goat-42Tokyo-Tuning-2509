@@ -15,6 +15,6 @@ func main() {
 		defer dbConn.Close()
 	}
 
-	cache.InitCache(dbConn)
+	go cache.InitCache(dbConn)
 	srv.Run()
 }
