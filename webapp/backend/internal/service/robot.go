@@ -70,7 +70,14 @@ func (s *RobotService) HasShippingOrders(ctx context.Context) (bool, error) {
 }
 
 func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID string, robotCapacity int) (model.DeliveryPlan, error) {
-	n := len(orders)
+	prunedOrders := make([]model.Order, 0, len(orders))
+	for _, order := range orders {
+		if order.Weight <= robotCapacity {
+			prunedOrders = append(prunedOrders, order)
+		}
+	}
+
+	n := len(prunedOrders)
 
 	// dp[i][w] = i番目までの品物を使って、重さw以下で実現できる最大価値
 	dp := make([][]int, n+1)
@@ -82,7 +89,7 @@ func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID 
 	}
 
 	for i := 1; i <= n; i++ {
-		order := orders[i-1]
+		order := prunedOrders[i-1]
 		for w := 0; w <= robotCapacity; w++ {
 			// i番目の品物を選ばない場合
 			dp[i][w] = dp[i-1][w]
@@ -102,7 +109,7 @@ func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID 
 
 	w := robotCapacity
 	for i := n; i > 0; i-- {
-		order := orders[i-1]
+		order := prunedOrders[i-1]
 		if prevW[i][w] == w-order.Weight {
 			bestSet = append(bestSet, order)
 			totalWeight += order.Weight
