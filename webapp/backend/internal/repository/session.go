@@ -38,9 +38,11 @@ func bulkInsertSession(db DBTX) {
 		}
 		select {
 		case <-ticker.C:
-			query := "INSERT INTO user_sessions (session_uuid, user_id, expires_at) VALUES (:session_id, :user_id, :expires_at)"
-			_, _ = db.NamedExec(query, values[0:i+1])
-			i = 0
+			if i > 0 {
+				query := "INSERT INTO user_sessions (session_uuid, user_id, expires_at) VALUES (:session_id, :user_id, :expires_at)"
+				_, _ = db.NamedExec(query, values[0:i+1])
+				i = 0
+			}
 		case values[i] = <-sessionCh:
 			i++
 		}
