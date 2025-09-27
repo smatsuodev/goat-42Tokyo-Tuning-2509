@@ -4,7 +4,7 @@ CREATE INDEX idx_shippped_status ON orders (shipped_status);
 CREATE INDEX idx_user_name ON users (user_name);
 
 CREATE TABLE cache (
-    target VARCHAR(255) PRIMARY KEY,
+    target VARCHAR(255) PRIMARY KEY
 );
 
 SELECT SLEEP(30);
