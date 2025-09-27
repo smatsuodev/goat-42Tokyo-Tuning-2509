@@ -2,7 +2,6 @@ package cache
 
 import (
 	"backend/internal/model"
-	"backend/internal/utils"
 	"log"
 	"sync"
 	"time"
@@ -11,9 +10,8 @@ import (
 )
 
 type cache struct {
-	ProductsCnt     int
-	ProductsById    map[int]*model.Product
-	ProductsOrdered utils.Cache[string, []model.Product]
+	ProductsCnt  int
+	ProductsById []*model.Product
 
 	Order                  sync.RWMutex
 	ShippingOrderProductId map[int64]int
@@ -53,7 +51,7 @@ func InitCache(dbConn *sqlx.DB) {
 	}
 
 	Cache = cache{
-		ProductsById:           make(map[int]*model.Product, len(products)+1),
+		ProductsById:           make([]*model.Product, len(products)+1),
 		ShippingOrderProductId: make(map[int64]int),
 		UserOrders:             make([][]model.Order, len(users)+1),
 		OrderIdUserId: make(map[int64]struct {
