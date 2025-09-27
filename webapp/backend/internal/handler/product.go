@@ -72,6 +72,7 @@ func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *ProductHandler) CreateOrders(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserFromContext(r.Context())
 	if !ok {
+		log.Printf("User not found in context: %d", userID)
 		http.Error(w, "User not found in context", http.StatusInternalServerError)
 		return
 	}

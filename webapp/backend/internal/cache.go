@@ -6,15 +6,21 @@ import (
 	"context"
 	"log"
 	"sort"
+	"sync"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/samber/lo"
 )
 
 type cache struct {
-	Products        []model.Product
-	ProductsById    utils.Cache[int, *model.Product]
-	ProductsOrdered utils.Cache[string, []model.Product]
+	Products               []model.Product
+	ProductsById           utils.Cache[int, *model.Product]
+	ProductsOrdered        utils.Cache[string, []model.Product]
+	ShippingOrderProductId struct {
+		Values map[int64]int
+		Mu     sync.RWMutex
+		IsInit bool
+	}
 }
 
 var Cache cache
@@ -23,6 +29,11 @@ func InitCache(dbConn *sqlx.DB) {
 	Cache = cache{
 		ProductsById:    lo.Must(utils.NewInMemoryLRUCache[int, *model.Product](300000)),
 		ProductsOrdered: lo.Must(utils.NewInMemoryLRUCache[string, []model.Product](300000)),
+		ShippingOrderProductId: struct {
+			Values map[int64]int
+			Mu     sync.RWMutex
+			IsInit bool
+		}{Values: make(map[int64]int), IsInit: false},
 	}
 	err := dbConn.Select(&Cache.Products, "SELECT * FROM products")
 	if err != nil {

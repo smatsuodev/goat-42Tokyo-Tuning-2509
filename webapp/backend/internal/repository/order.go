@@ -7,10 +7,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/samber/lo"
 )
 
 type OrderRepository struct {
@@ -38,6 +40,10 @@ func (r *OrderRepository) Create(ctx context.Context, order *model.Order) (strin
 func (r *OrderRepository) CreateMany(ctx context.Context, orders []*model.Order) ([]string, error) {
 	var idStart int64
 
+	cache.Cache.ShippingOrderProductId.Mu.Lock()
+	defer func() {
+		cache.Cache.ShippingOrderProductId.Mu.Unlock()
+	}()
 	// TODO: トランザクション貼らないとまずいかも
 	err := r.db.GetContext(ctx, &idStart, "SELECT `AUTO_INCREMENT` FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'orders'")
 	if err != nil {
@@ -45,20 +51,19 @@ func (r *OrderRepository) CreateMany(ctx context.Context, orders []*model.Order)
 	}
 
 	query := `INSERT INTO orders (user_id, product_id, shipped_status, created_at) VALUES (:user_id, :product_id, 'shipping', NOW())`
-	result, err := r.db.NamedExecContext(ctx, query, orders)
+	_, err = r.db.NamedExecContext(ctx, query, orders)
 	if err != nil {
 		return nil, err
 	}
 
-	idLast, err := result.LastInsertId()
-	if err != nil {
-		return nil, err
-	}
+	idLast := idStart + int64(len(orders)) - 1
 
 	ids := make([]string, idLast-idStart+1)
 	for i := idStart; i <= idLast; i++ {
 		ids[i-idStart] = fmt.Sprintf("%d", i)
+		cache.Cache.ShippingOrderProductId.Values[i] = orders[i-idStart].ProductID
 	}
+
 	return ids, nil
 }
 
@@ -74,34 +79,77 @@ func (r *OrderRepository) UpdateStatuses(ctx context.Context, orderIDs []int64, 
 	}
 	query = r.db.Rebind(query)
 	_, err = r.db.ExecContext(ctx, query, args...)
-	return err
+	if err != nil {
+		return err
+	}
+	if newStatus != "shipping" {
+		cache.Cache.ShippingOrderProductId.Mu.Lock()
+		defer func() {
+			cache.Cache.ShippingOrderProductId.Mu.Unlock()
+		}()
+		for _, orderId := range orderIDs {
+			delete(cache.Cache.ShippingOrderProductId.Values, orderId)
+		}
+	}
+	return nil
 }
 
 // 配送中(shipped_status:shipping)の注文一覧を取得
 func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order, error) {
-	var orders []model.Order
-	query := `
-        SELECT
-            o.order_id,
-            p.weight,
-            p.value
-        FROM orders o
-        JOIN products p ON o.product_id = p.product_id
-        WHERE o.shipped_status = 'shipping'
-    `
-	err := r.db.SelectContext(ctx, &orders, query)
-	return orders, err
+	// var orders []model.Order
+	// query := `
+	//     SELECT
+	//         o.order_id,
+	//         p.weight,
+	//         p.value
+	//     FROM orders o
+	//     JOIN products p ON o.product_id = p.product_id
+	//     WHERE o.shipped_status = 'shipping'
+	// `
+
+	// err := r.db.SelectContext(ctx, &orders, query)
+
+	cache.Cache.ShippingOrderProductId.Mu.Lock()
+	defer func() {
+		cache.Cache.ShippingOrderProductId.Mu.Unlock()
+	}()
+	if !cache.Cache.ShippingOrderProductId.IsInit {
+		var orders []model.Order
+		if err := r.db.SelectContext(ctx, &orders, "SELECT * FROM orders WHERE shipped_status = 'shipping' "); err != nil {
+			log.Fatalf("Failed to get shipping orders: %v", err)
+		}
+		for _, o := range orders {
+			cache.Cache.ShippingOrderProductId.Values[o.OrderID] = o.ProductID
+		}
+		cache.Cache.ShippingOrderProductId.IsInit = true
+	}
+	orders := lo.MapToSlice(cache.Cache.ShippingOrderProductId.Values, func(k int64, v int) model.Order {
+		p, _ := cache.Cache.ProductsById.Get(ctx, v)
+		return model.Order{
+			OrderID: k,
+			Weight:  p.Value.Weight,
+			Value:   p.Value.Value,
+		}
+	})
+
+	return orders, nil
 }
 
 // 配送対象となる(shipping)注文の件数を取得
 func (r *OrderRepository) CountShippingOrders(ctx context.Context) (int, error) {
-	var count int
-	// TODO: クエリ叩かなくても良い方法はないか
-	const query = "SELECT COUNT(*) FROM orders WHERE shipped_status = 'shipping'"
-	if err := r.db.GetContext(ctx, &count, query); err != nil {
-		return 0, err
+	cache.Cache.ShippingOrderProductId.Mu.Lock()
+	defer cache.Cache.ShippingOrderProductId.Mu.Unlock()
+	if !cache.Cache.ShippingOrderProductId.IsInit {
+		var orders []model.Order
+		if err := r.db.SelectContext(ctx, &orders, "SELECT * FROM orders WHERE shipped_status = 'shipping' "); err != nil {
+			log.Fatalf("Failed to get shipping orders: %v", err)
+		}
+		for _, o := range orders {
+			cache.Cache.ShippingOrderProductId.Values[o.OrderID] = o.ProductID
+		}
+		cache.Cache.ShippingOrderProductId.IsInit = true
 	}
-	return count, nil
+	return len(cache.Cache.ShippingOrderProductId.Values), nil
 }
 
 // 注文履歴一覧を取得
