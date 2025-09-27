@@ -37,6 +37,7 @@ func InitCache(dbConn *sqlx.DB) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
+	log.Println("InitCache start")
 	Cache = cache{
 		ProductsById:    lo.Must(utils.NewInMemoryLRUCache[int, model.Product](300000)),
 		ProductsOrdered: lo.Must(utils.NewInMemoryLRUCache[string, []model.Product](300000)),
@@ -63,4 +64,5 @@ func InitCache(dbConn *sqlx.DB) {
 	for _, o := range orders {
 		Cache.ShippingOrderProductId.Values[o.OrderID] = o.ProductID
 	}
+	log.Println("InitCache done")
 }
