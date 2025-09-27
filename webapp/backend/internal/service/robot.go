@@ -77,44 +77,29 @@ func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID 
 		}
 	}
 
-	n := len(prunedOrders)
-
-	// dp[i][w] = i番目までの品物を使って、重さw以下で実現できる最大価値
-	dp := make([][]int, n+1)
-	prevW := make([][]int, n+1)
-
-	for i := range dp {
-		dp[i] = make([]int, robotCapacity+1)
-		prevW[i] = make([]int, robotCapacity+1)
+	wTotal := 0
+	for _, order := range prunedOrders {
+		wTotal += order.Weight
+	}
+	if wTotal <= robotCapacity {
+		vTotal := 0
+		for _, order := range prunedOrders {
+			vTotal += order.Value
+		}
+		return model.DeliveryPlan{
+			RobotID:     robotID,
+			TotalWeight: wTotal,
+			TotalValue:  vTotal,
+			Orders:      orders,
+		}, nil
 	}
 
-	for i := 1; i <= n; i++ {
-		order := prunedOrders[i-1]
-		for w := 0; w <= robotCapacity; w++ {
-			// i番目の品物を選ばない場合
-			dp[i][w] = dp[i-1][w]
-			prevW[i][w] = w
-
-			// i番目の品物を選ぶ場合
-			if w >= order.Weight && dp[i][w] < dp[i-1][w-order.Weight]+order.Value {
-				dp[i][w] = dp[i-1][w-order.Weight] + order.Value
-				prevW[i][w] = w - order.Weight
-			}
-		}
-	}
-
-	bestValue := dp[n][robotCapacity]
-	var totalWeight int
-	bestSet := make([]model.Order, 0, n)
-
-	w := robotCapacity
-	for i := n; i > 0; i-- {
-		order := prunedOrders[i-1]
-		if prevW[i][w] == w-order.Weight {
-			bestSet = append(bestSet, order)
-			totalWeight += order.Weight
-		}
-		w = prevW[i][w]
+	bestSet := findBestSetRecursive(prunedOrders, robotCapacity)
+	bestValue := 0
+	totalWeight := 0
+	for _, order := range bestSet {
+		bestValue += order.Value
+		totalWeight += order.Weight
 	}
 
 	return model.DeliveryPlan{
@@ -123,4 +108,59 @@ func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID 
 		TotalValue:  bestValue,
 		Orders:      bestSet,
 	}, nil
+}
+
+// 再帰的に最適な品物セットを見つける関数
+func findBestSetRecursive(orders []model.Order, capacity int) []model.Order {
+	n := len(orders)
+
+	// ベースケース: 品物が1つ以下なら、容量に入るか単純に判断
+	if n <= 1 {
+		if n == 1 && orders[0].Weight <= capacity {
+			return orders
+		}
+		return []model.Order{}
+	}
+
+	// 1. 分割
+	mid := n / 2
+	firstHalf := orders[:mid]
+	secondHalf := orders[mid:]
+
+	// 2a. 順方向DP (空間計算量 O(capacity))
+	dpForward := calculateMaxValues(firstHalf, capacity)
+
+	// 2b. 逆方向DP (空間計算量 O(capacity))
+	dpBackward := calculateMaxValues(secondHalf, capacity)
+
+	// 3. 最適分割点 w_split を発見
+	bestValue := -1
+	wSplit := -1
+	for w := 0; w <= capacity; w++ {
+		currentValue := dpForward[w] + dpBackward[capacity-w]
+		if currentValue > bestValue {
+			bestValue = currentValue
+			wSplit = w
+		}
+	}
+
+	// 4. 統治 (再帰)
+	solution1 := findBestSetRecursive(firstHalf, wSplit)
+	solution2 := findBestSetRecursive(secondHalf, capacity-wSplit)
+
+	return append(solution1, solution2...)
+}
+
+// 空間計算量 O(capacity) で最大価値の配列を計算するヘルパー関数
+func calculateMaxValues(orders []model.Order, capacity int) []int {
+	dp := make([]int, capacity+1)
+	for _, order := range orders {
+		for w := capacity; w >= order.Weight; w-- {
+			// 価値を更新
+			if dp[w] < dp[w-order.Weight]+order.Value {
+				dp[w] = dp[w-order.Weight] + order.Value
+			}
+		}
+	}
+	return dp
 }
