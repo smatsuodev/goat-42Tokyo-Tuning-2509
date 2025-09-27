@@ -121,7 +121,7 @@ if [[ $HOSTNAME == ftt2508-* ]]; then
     echo -e "bash get_test_status.sh $JOB_ID"
     echo -e "\n\n===================================================\n\n"
 
-    while ! bash get_test_status.sh $JOB_ID 2>&1 | grep -q "走行中"; do
+    while ! timeout 1 bash get_test_status.sh $JOB_ID 2>&1 | grep -q "走行中"; do
         sleep 1
     done
     echo "FOUND: READY"
