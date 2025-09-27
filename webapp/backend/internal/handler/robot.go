@@ -32,6 +32,32 @@ func (h *RobotHandler) GetDeliveryPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: orderが無い間は止めるようにする
+	// ctx := r.Context()
+	// err = utils.WithTimeout(ctx, func(ctx context.Context) error {
+	// 	for {
+	// 		hasOrders, err := h.RobotSvc.HasShippingOrders(ctx)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		if hasOrders {
+	// 			break
+	// 		}
+
+	// 		select {
+	// 		case <-ctx.Done():
+	// 			log.Printf("Request cancelled while waiting for shipping orders: %v", ctx.Err())
+	// 			return nil
+	// 		case <-time.After(100 * time.Millisecond):
+	// 		}
+	// 	}
+	// 	return nil
+	// })
+	// if err != nil {
+	// 	log.Printf("Failed to check shipping orders: %v", err)
+	// 	http.Error(w, "Failed to check shipping orders", http.StatusInternalServerError)
+	// }
+
 	plan, err := h.RobotSvc.GenerateDeliveryPlan(r.Context(), robotID, capacity)
 	if err != nil {
 		log.Printf("Failed to generate delivery plan: %v", err)

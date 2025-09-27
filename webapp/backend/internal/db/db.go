@@ -37,9 +37,9 @@ func InitDBConnection() (*sqlx.DB, error) {
 	}
 	log.Println("Successfully connected to MySQL!")
 
-	dbConn.SetMaxOpenConns(25)
-	dbConn.SetMaxIdleConns(10)
-	dbConn.SetConnMaxLifetime(0)
+	dbConn.SetMaxOpenConns(100)
+	dbConn.SetMaxIdleConns(100)
+	dbConn.SetConnMaxLifetime(1 * time.Second)
 
 	return dbConn, nil
 }

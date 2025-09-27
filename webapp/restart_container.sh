@@ -20,6 +20,7 @@ else
     echo "ローカル環境でのコンテナ再起動を開始します。"
     # init.sh実行時には実行しない
     docker compose -f docker-compose.local.yml down db backend --volumes --rmi local
+    rm -rf /tmp/log/mysql/* /tmp/log/nginx/*
 	docker compose -f docker-compose.local.yml up --build -d
 fi
 

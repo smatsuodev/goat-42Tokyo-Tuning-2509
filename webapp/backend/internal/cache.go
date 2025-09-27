@@ -13,6 +13,7 @@ import (
 
 type cache struct {
 	Products        []model.Product
+	ProductsById    utils.Cache[int, *model.Product]
 	ProductsOrdered utils.Cache[string, []model.Product]
 }
 
@@ -20,6 +21,7 @@ var Cache cache
 
 func InitCache(dbConn *sqlx.DB) {
 	Cache = cache{
+		ProductsById:    lo.Must(utils.NewInMemoryLRUCache[int, *model.Product](300000)),
 		ProductsOrdered: lo.Must(utils.NewInMemoryLRUCache[string, []model.Product](300000)),
 	}
 	err := dbConn.Select(&Cache.Products, "SELECT * FROM products")
@@ -29,6 +31,10 @@ func InitCache(dbConn *sqlx.DB) {
 	sort.SliceStable(Cache.Products, func(i, j int) bool {
 		return Cache.Products[i].ProductID < Cache.Products[j].ProductID
 	})
+
+	for _, p := range Cache.Products {
+		Cache.ProductsById.Set(context.Background(), p.ProductID, &p)
+	}
 
 	for _, key := range []string{"description", "image", "name", "value", "weight", "product_id"} {
 		for _, sortOrder := range []string{"", "asc", "desc"} {
@@ -41,7 +47,7 @@ func InitCache(dbConn *sqlx.DB) {
 			var products []model.Product
 			err := dbConn.Select(&products, baseQuery)
 			if err != nil {
-				log.Fatal("Failed to get products ordered")
+				log.Fatalf("Failed to get products ordered: %v", err)
 			}
 			Cache.ProductsOrdered.Set(context.TODO(), key+" "+sortOrder, products)
 			log.Printf("Cache.ProductsOrdered.Set: key=%s,size=%d", key+" "+sortOrder, len(products))

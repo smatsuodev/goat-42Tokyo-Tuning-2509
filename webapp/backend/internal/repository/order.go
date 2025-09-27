@@ -1,9 +1,11 @@
 package repository
 
 import (
+	cache "backend/internal"
 	"backend/internal/model"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -31,6 +33,33 @@ func (r *OrderRepository) Create(ctx context.Context, order *model.Order) (strin
 		return "", err
 	}
 	return fmt.Sprintf("%d", id), nil
+}
+
+func (r *OrderRepository) CreateMany(ctx context.Context, orders []*model.Order) ([]string, error) {
+	var idStart int64
+
+	// TODO: トランザクション貼らないとまずいかも
+	err := r.db.GetContext(ctx, &idStart, "SELECT `AUTO_INCREMENT` FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'orders'")
+	if err != nil {
+		return nil, err
+	}
+
+	query := `INSERT INTO orders (user_id, product_id, shipped_status, created_at) VALUES (:user_id, :product_id, 'shipping', NOW())`
+	result, err := r.db.NamedExecContext(ctx, query, orders)
+	if err != nil {
+		return nil, err
+	}
+
+	idLast, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, idLast-idStart+1)
+	for i := idStart; i <= idLast; i++ {
+		ids[i-idStart] = fmt.Sprintf("%d", i)
+	}
+	return ids, nil
 }
 
 // 複数の注文IDのステータスを一括で更新
@@ -64,6 +93,17 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
 	return orders, err
 }
 
+// 配送対象となる(shipping)注文の件数を取得
+func (r *OrderRepository) CountShippingOrders(ctx context.Context) (int, error) {
+	var count int
+	// TODO: クエリ叩かなくても良い方法はないか
+	const query = "SELECT COUNT(*) FROM orders WHERE shipped_status = 'shipping'"
+	if err := r.db.GetContext(ctx, &count, query); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // 注文履歴一覧を取得
 func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.ListRequest) ([]model.Order, int, error) {
 	query := `
@@ -85,10 +125,14 @@ func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.
 
 	var orders []model.Order
 	for _, o := range ordersRaw {
-		var productName string
-		if err := r.db.GetContext(ctx, &productName, "SELECT name FROM products WHERE product_id = ?", o.ProductID); err != nil {
+		p, err := cache.Cache.ProductsById.Get(ctx, o.ProductID)
+		if err != nil {
 			return nil, 0, err
 		}
+		if !p.Found {
+			return nil, 0, errors.New("product not found")
+		}
+		productName := p.Value.Name
 		if req.Search != "" {
 			if req.Type == "prefix" {
 				if !strings.HasPrefix(productName, req.Search) {

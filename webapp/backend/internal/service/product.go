@@ -19,36 +19,28 @@ func NewProductService(store *repository.Store) *ProductService {
 func (s *ProductService) CreateOrders(ctx context.Context, userID int, items []model.RequestItem) ([]string, error) {
 	var insertedOrderIDs []string
 
-	err := s.store.ExecTx(ctx, func(txStore *repository.Store) error {
-		itemsToProcess := make(map[int]int)
-		for _, item := range items {
-			if item.Quantity > 0 {
-				itemsToProcess[item.ProductID] = item.Quantity
-			}
-		}
-		if len(itemsToProcess) == 0 {
-			return nil
-		}
+	orders := make([]*model.Order, 0)
 
-		for pID, quantity := range itemsToProcess {
-			for i := 0; i < quantity; i++ {
+	for _, item := range items {
+		if item.Quantity > 0 {
+			for i := 0; i < item.Quantity; i++ {
 				order := &model.Order{
 					UserID:    userID,
-					ProductID: pID,
+					ProductID: item.ProductID,
 				}
-				orderID, err := txStore.OrderRepo.Create(ctx, order)
-				if err != nil {
-					return err
-				}
-				insertedOrderIDs = append(insertedOrderIDs, orderID)
+				orders = append(orders, order)
 			}
 		}
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
 	}
+
+	if len(orders) != 0 {
+		ids, err := s.store.OrderRepo.CreateMany(ctx, orders)
+		if err != nil {
+			return nil, err
+		}
+		insertedOrderIDs = ids
+	}
+
 	log.Printf("Created %d orders for user %d", len(insertedOrderIDs), userID)
 	return insertedOrderIDs, nil
 }
