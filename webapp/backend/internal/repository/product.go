@@ -29,7 +29,7 @@ func (r *ProductRepository) ListProducts(ctx context.Context, userID int, req mo
 		if err != nil {
 			return nil, 0, err
 		}
-		return products, len(cache.Cache.Products), nil
+		return products, cache.Cache.ProductsCnt, nil
 	} else {
 		baseQuery := `
 		SELECT product_id, name, value, weight, image, description

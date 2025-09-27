@@ -5,7 +5,6 @@ import (
 	"backend/internal/utils"
 	"context"
 	"log"
-	"sort"
 	"sync"
 	"time"
 
@@ -14,7 +13,8 @@ import (
 )
 
 type cache struct {
-	Products               []model.Product
+	// Products               []model.Product
+	ProductsCnt            int
 	ProductsById           utils.Cache[int, model.Product]
 	ProductsOrdered        utils.Cache[string, []model.Product]
 	ShippingOrderProductId struct {
@@ -27,6 +27,7 @@ var Cache cache
 
 func InitCache(dbConn *sqlx.DB) {
 	var tmp int
+	ctx := context.TODO()
 
 	for {
 		err := dbConn.Get(&tmp, "SELECT COUNT(*) FROM cache")
@@ -36,6 +37,7 @@ func InitCache(dbConn *sqlx.DB) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
+	log.Println("InitCache start")
 	Cache = cache{
 		ProductsById:    lo.Must(utils.NewInMemoryLRUCache[int, model.Product](300000)),
 		ProductsOrdered: lo.Must(utils.NewInMemoryLRUCache[string, []model.Product](300000)),
@@ -45,16 +47,14 @@ func InitCache(dbConn *sqlx.DB) {
 		}{Values: make(map[int64]int)},
 	}
 
-	err := dbConn.Select(&Cache.Products, "SELECT * FROM products")
+	var products []model.Product
+	err := dbConn.Select(&products, "SELECT * FROM products")
 	if err != nil {
 		log.Fatal("Failed to get products")
 	}
-	sort.SliceStable(Cache.Products, func(i, j int) bool {
-		return Cache.Products[i].ProductID < Cache.Products[j].ProductID
-	})
-
-	for _, p := range Cache.Products {
-		Cache.ProductsById.Set(context.Background(), p.ProductID, p)
+	Cache.ProductsCnt = len(products)
+	for _, p := range products {
+		Cache.ProductsById.Set(ctx, p.ProductID, p)
 	}
 
 	var orders []model.Order
@@ -64,4 +64,5 @@ func InitCache(dbConn *sqlx.DB) {
 	for _, o := range orders {
 		Cache.ShippingOrderProductId.Values[o.OrderID] = o.ProductID
 	}
+	log.Println("InitCache done")
 }
