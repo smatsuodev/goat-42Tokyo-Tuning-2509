@@ -53,6 +53,22 @@ func (s *RobotService) UpdateOrderStatus(ctx context.Context, orderID int64, new
 	})
 }
 
+func (s *RobotService) HasShippingOrders(ctx context.Context) (bool, error) {
+	var hasOrders bool
+	err := utils.WithTimeout(ctx, func(ctx context.Context) error {
+		count, err := s.store.OrderRepo.CountShippingOrders(ctx)
+		if err != nil {
+			return err
+		}
+		hasOrders = count > 0
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return hasOrders, nil
+}
+
 func selectOrdersForDelivery(ctx context.Context, orders []model.Order, robotID string, robotCapacity int) (model.DeliveryPlan, error) {
 	n := len(orders)
 

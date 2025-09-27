@@ -91,6 +91,17 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
 	return orders, err
 }
 
+// 配送対象となる(shipping)注文の件数を取得
+func (r *OrderRepository) CountShippingOrders(ctx context.Context) (int, error) {
+	var count int
+	// TODO: クエリ叩かなくても良い方法はないか
+	const query = "SELECT COUNT(*) FROM orders WHERE shipped_status = 'shipping'"
+	if err := r.db.GetContext(ctx, &count, query); err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // 注文履歴一覧を取得
 func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.ListRequest) ([]model.Order, int, error) {
 	query := `
