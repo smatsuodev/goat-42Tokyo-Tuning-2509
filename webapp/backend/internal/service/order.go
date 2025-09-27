@@ -3,7 +3,6 @@ package service
 import (
 	"backend/internal/model"
 	"backend/internal/repository"
-	"backend/internal/service/utils"
 	"context"
 )
 
@@ -19,16 +18,9 @@ func NewOrderService(store *repository.Store) *OrderService {
 func (s *OrderService) FetchOrders(ctx context.Context, userID int, req model.ListRequest) ([]model.Order, int, error) {
 	var orders []model.Order
 	var total int
-	err := utils.WithTimeout(ctx, func(ctx context.Context) error {
-		var fetchErr error
-		orders, total, fetchErr = s.store.OrderRepo.ListOrders(ctx, userID, req)
-		if fetchErr != nil {
-			return fetchErr
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, 0, err
+	orders, total, fetchErr := s.store.OrderRepo.ListOrders(ctx, userID, req)
+	if fetchErr != nil {
+		return nil, 0, fetchErr
 	}
 	return orders, total, nil
 }
