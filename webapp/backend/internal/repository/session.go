@@ -77,7 +77,7 @@ func (r *SessionRepository) FindUserBySessionID(ctx context.Context, sessionID s
 	if !ok {
 		return 0, errors.New("session not found")
 	}
-	if session.ExpiresAt.After(time.Now()) {
+	if session.ExpiresAt.Before(time.Now()) {
 		delete(cache.Cache.Sessions, sessionID)
 		return 0, errors.New("session has been expired")
 	}
