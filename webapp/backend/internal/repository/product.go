@@ -4,7 +4,7 @@ import (
 	cache "backend/internal"
 	"backend/internal/model"
 	"context"
-	"sort"
+	"fmt"
 )
 
 type ProductRepository struct {
@@ -20,51 +20,16 @@ func (r *ProductRepository) ListProducts(ctx context.Context, userID int, req mo
 	var products []model.Product
 
 	if req.Search == "" {
-		products := make([]model.Product, len(cache.Cache.Products))
-		copy(products, cache.Cache.Products)
-		sort.SliceStable(products, func(i, j int) bool {
-			switch req.SortField {
-			case "description":
-				if req.SortOrder != "asc" {
-					return products[i].Description > products[j].Description
-				} else {
-					return products[i].Description < products[j].Description
-				}
-			case "image":
-				if req.SortOrder != "asc" {
-					return products[i].Image > products[j].Image
-				} else {
-					return products[i].Image < products[j].Image
-				}
-			case "name":
-				if req.SortOrder != "asc" {
-					return products[i].Name > products[j].Name
-				} else {
-					return products[i].Name < products[j].Name
-				}
-			case "product_id":
-				if req.SortOrder != "asc" {
-					return products[i].ProductID > products[j].ProductID
-				} else {
-					return products[i].ProductID < products[j].ProductID
-				}
-			case "value":
-				if req.SortOrder == "DESC" {
-					return products[i].Value > products[j].Value
-				} else {
-					return products[i].Value < products[j].Value
-				}
-			case "weight":
-				if req.SortOrder == "DESC" {
-					return products[i].Weight > products[j].Weight
-				} else {
-					return products[i].Weight < products[j].Weight
-				}
-			default:
-				// todo: 例外処理
-				return true
-			}
-		})
+		baseQuery := `
+		SELECT product_id, name, value, weight, image, description
+		FROM products
+	` + " ORDER BY " + req.SortField + " " + req.SortOrder + " , product_id ASC LIMIT " + fmt.Sprintf("%d", req.PageSize) + " OFFSET " + fmt.Sprintf("%d", req.Offset)
+
+		err := r.db.SelectContext(ctx, &products, baseQuery)
+		if err != nil {
+			return nil, 0, err
+		}
+		return products, len(cache.Cache.Products), nil
 	} else {
 		baseQuery := `
 		SELECT product_id, name, value, weight, image, description
