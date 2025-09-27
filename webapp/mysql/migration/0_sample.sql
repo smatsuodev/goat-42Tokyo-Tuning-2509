@@ -8,3 +8,5 @@ CREATE TABLE cache (
 );
 
 SELECT SLEEP(30);
+
+DROP TABLE cache;
