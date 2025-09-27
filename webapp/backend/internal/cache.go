@@ -41,7 +41,7 @@ func InitCache(dbConn *sqlx.DB) {
 			var products []model.Product
 			err := dbConn.Select(&products, baseQuery)
 			if err != nil {
-				log.Fatal("Failed to get products ordered: %v", err)
+				log.Fatalf("Failed to get products ordered: %v", err)
 			}
 			Cache.ProductsOrdered.Set(context.TODO(), key+" "+sortOrder, products)
 			log.Printf("Cache.ProductsOrdered.Set: key=%s,size=%d", key+" "+sortOrder, len(products))
