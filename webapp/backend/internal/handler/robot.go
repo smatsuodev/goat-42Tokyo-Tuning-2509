@@ -6,24 +6,74 @@ import (
 	"backend/internal/service/utils"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type RobotHandler struct {
 	RobotSvc *service.RobotService
 }
 
+type Robot struct {
+	id      int
+	ownerID uint64
+}
+
+var entry chan uint64
+var nextRobot chan Robot
+var done chan int
+
+var robots []bool
+var userQueue []uint64
+
+const MAX_ROBOT = 1
+
 func NewRobotHandler(robotSvc *service.RobotService) *RobotHandler {
+	entry = make(chan uint64)
+	nextRobot = make(chan Robot)
+	done = make(chan int)
+	robots = make([]bool, MAX_ROBOT)
+	userQueue = make([]uint64, 0)
+	for i := range robots {
+		robots[i] = true
+	}
+	go popQueue()
 	return &RobotHandler{RobotSvc: robotSvc}
+}
+
+func sendRobot(userID uint64) {
+	for i, available := range robots {
+		if available {
+			nextRobot <- Robot{ownerID: userID, id: i}
+			robots[i] = !available
+			return
+		}
+	}
+	userQueue = append(userQueue, userID)
+}
+
+func popQueue() {
+	for {
+		select {
+		case userID := <-entry:
+			sendRobot(userID)
+		case robotID := <-done:
+			robots[robotID] = true
+			if len(userQueue) != 0 {
+				sendRobot(userQueue[0])
+				userQueue = userQueue[1:]
+			}
+		}
+	}
 }
 
 // 配送計画を取得
 func (h *RobotHandler) GetDeliveryPlan(w http.ResponseWriter, r *http.Request) {
-	robotID := "robot-001"
-
 	capacityStr := r.URL.Query().Get("capacity")
 	if capacityStr == "" {
 		http.Error(w, "Query parameter 'capacity' is required", http.StatusBadRequest)
@@ -36,6 +86,20 @@ func (h *RobotHandler) GetDeliveryPlan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
+	userID := middleware.NextRequestID()
+	entry <- userID
+	var robot Robot
+	err = utils.WithTimeout(ctx, func(ctx context.Context) error {
+		for {
+			select {
+			case robot = <-nextRobot:
+				if robot.ownerID == userID {
+					return nil
+				}
+			}
+		}
+	})
+
 	err = utils.WithTimeout(ctx, func(ctx context.Context) error {
 		for {
 			hasOrders, err := h.RobotSvc.HasShippingOrders(ctx)
@@ -60,13 +124,13 @@ func (h *RobotHandler) GetDeliveryPlan(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to check shipping orders", http.StatusInternalServerError)
 	}
 
-	plan, err := h.RobotSvc.GenerateDeliveryPlan(r.Context(), robotID, capacity)
+	plan, err := h.RobotSvc.GenerateDeliveryPlan(r.Context(), fmt.Sprintf("robot-00%d", robot.id+1), capacity)
 	if err != nil {
 		log.Printf("Failed to generate delivery plan: %v", err)
 		http.Error(w, "Failed to create delivery plan", http.StatusInternalServerError)
 		return
 	}
-
+	done <- robot.id
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(plan)
 }
