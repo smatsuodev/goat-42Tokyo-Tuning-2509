@@ -85,7 +85,7 @@ func EnableDebugHandler(r *chi.Mux) {
 
 func EnableDebugMode(r *chi.Mux) {
 	r.Use(chiMiddleware.Logger)
-	r.Use(chiMiddleware.Recoverer)
+	// r.Use(chiMiddleware.Recoverer)
 }
 
 func (s *Server) setupRoutes(

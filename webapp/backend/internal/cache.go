@@ -33,7 +33,7 @@ func InitCache(dbConn *sqlx.DB) {
 			Values map[int64]int
 			Mu     sync.RWMutex
 			IsInit bool
-		}{Values: make(map[int64]int)},
+		}{Values: make(map[int64]int), IsInit: false},
 	}
 	err := dbConn.Select(&Cache.Products, "SELECT * FROM products")
 	if err != nil {
