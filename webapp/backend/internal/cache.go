@@ -20,11 +20,6 @@ type cache struct {
 		UserID int
 		Index  int
 	}
-	Session  sync.RWMutex
-	Sessions map[string]struct {
-		UserID    int
-		ExpiresAt time.Time
-	}
 }
 
 var Cache cache
@@ -63,10 +58,6 @@ func InitCache(dbConn *sqlx.DB) {
 			UserID int
 			Index  int
 		}, 0),
-		Sessions: make(map[string]struct {
-			UserID    int
-			ExpiresAt time.Time
-		}, len(users)+1),
 	}
 
 	for i := range Cache.UserOrders {
