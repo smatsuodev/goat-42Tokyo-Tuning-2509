@@ -11,4 +11,5 @@ type DBTX interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 	Rebind(query string) string
 	NamedExecContext(ctx context.Context, query string, argc interface{}) (sql.Result, error)
+	NamedExec(query string, argc interface{}) (sql.Result, error)
 }
