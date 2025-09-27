@@ -123,8 +123,12 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
 		}
 		cache.Cache.ShippingOrderProductId.IsInit = true
 	}
+	var err error
 	orders := lo.MapToSlice(cache.Cache.ShippingOrderProductId.Values, func(k int64, v int) model.Order {
 		p, _ := cache.Cache.ProductsById.Get(ctx, v)
+		if !p.Found {
+			err = errors.New("not found")
+		}
 		return model.Order{
 			OrderID: k,
 			Weight:  p.Value.Weight,
@@ -132,7 +136,7 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
 		}
 	})
 
-	return orders, nil
+	return orders, err
 }
 
 // 配送対象となる(shipping)注文の件数を取得

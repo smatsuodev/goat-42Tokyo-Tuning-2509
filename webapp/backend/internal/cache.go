@@ -14,7 +14,7 @@ import (
 
 type cache struct {
 	Products               []model.Product
-	ProductsById           utils.Cache[int, *model.Product]
+	ProductsById           utils.Cache[int, model.Product]
 	ProductsOrdered        utils.Cache[string, []model.Product]
 	ShippingOrderProductId struct {
 		Values map[int64]int
@@ -27,7 +27,7 @@ var Cache cache
 
 func InitCache(dbConn *sqlx.DB) {
 	Cache = cache{
-		ProductsById:    lo.Must(utils.NewInMemoryLRUCache[int, *model.Product](300000)),
+		ProductsById:    lo.Must(utils.NewInMemoryLRUCache[int, model.Product](300000)),
 		ProductsOrdered: lo.Must(utils.NewInMemoryLRUCache[string, []model.Product](300000)),
 		ShippingOrderProductId: struct {
 			Values map[int64]int
@@ -44,7 +44,7 @@ func InitCache(dbConn *sqlx.DB) {
 	})
 
 	for _, p := range Cache.Products {
-		Cache.ProductsById.Set(context.Background(), p.ProductID, &p)
+		Cache.ProductsById.Set(context.Background(), p.ProductID, p)
 	}
 
 	for _, key := range []string{"description", "image", "name", "value", "weight", "product_id"} {
