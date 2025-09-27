@@ -35,9 +35,9 @@ services:
           "-X",
           "GET",
         ]
-      interval: 1s
+      interval: 10s
       timeout: 3m
-      retries: 180
+      retries: 10
       start_period: 30s
 
   # ----------------------------------------------------
