@@ -33,6 +33,7 @@ func InitCache(dbConn *sqlx.DB) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	dbConn.Exec("DROP TABLE cache")
 
 	var products []model.Product
 	err := dbConn.Select(&products, "SELECT * FROM products")
