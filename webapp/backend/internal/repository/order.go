@@ -1,9 +1,11 @@
 package repository
 
 import (
+	cache "backend/internal"
 	"backend/internal/model"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -123,10 +125,14 @@ func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.
 
 	var orders []model.Order
 	for _, o := range ordersRaw {
-		var productName string
-		if err := r.db.GetContext(ctx, &productName, "SELECT name FROM products WHERE product_id = ?", o.ProductID); err != nil {
+		p, err := cache.Cache.ProductsById.Get(ctx, o.ProductID)
+		if err != nil {
 			return nil, 0, err
 		}
+		if !p.Found {
+			return nil, 0, errors.New("product not found")
+		}
+		productName := p.Value.Name
 		if req.Search != "" {
 			if req.Type == "prefix" {
 				if !strings.HasPrefix(productName, req.Search) {
