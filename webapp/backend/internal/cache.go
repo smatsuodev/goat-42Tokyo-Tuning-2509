@@ -63,5 +63,4 @@ func InitCache(dbConn *sqlx.DB) {
 		Cache.ShippingOrderProductId.Values[o.OrderID] = o.ProductID
 	}
 	log.Println("InitCache done")
-	go InitCache()
 }
