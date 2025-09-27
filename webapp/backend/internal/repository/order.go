@@ -4,7 +4,6 @@ import (
 	cache "backend/internal"
 	"backend/internal/model"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -39,10 +38,8 @@ func (r *OrderRepository) Create(ctx context.Context, order *model.Order) (strin
 func (r *OrderRepository) CreateMany(ctx context.Context, orders []*model.Order) ([]string, error) {
 	var idStart int64
 
-	cache.Cache.ShippingOrderProductId.Mu.Lock()
-	defer func() {
-		cache.Cache.ShippingOrderProductId.Mu.Unlock()
-	}()
+	cache.Cache.Order.Lock()
+	defer cache.Cache.Order.Unlock()
 	// TODO: トランザクション貼らないとまずいかも
 	err := r.db.GetContext(ctx, &idStart, "SELECT `AUTO_INCREMENT` FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'orders'")
 	if err != nil {
@@ -60,7 +57,7 @@ func (r *OrderRepository) CreateMany(ctx context.Context, orders []*model.Order)
 	ids := make([]string, idLast-idStart+1)
 	for i := idStart; i <= idLast; i++ {
 		ids[i-idStart] = fmt.Sprintf("%d", i)
-		cache.Cache.ShippingOrderProductId.Values[i] = orders[i-idStart].ProductID
+		cache.UpdateOrder(*orders[i-idStart])
 	}
 
 	return ids, nil
@@ -81,14 +78,14 @@ func (r *OrderRepository) UpdateStatuses(ctx context.Context, orderIDs []int64, 
 	if err != nil {
 		return err
 	}
-	if newStatus != "shipping" {
-		cache.Cache.ShippingOrderProductId.Mu.Lock()
-		defer func() {
-			cache.Cache.ShippingOrderProductId.Mu.Unlock()
-		}()
-		for _, orderId := range orderIDs {
-			delete(cache.Cache.ShippingOrderProductId.Values, orderId)
+	cache.Cache.Order.Lock()
+	defer cache.Cache.Order.Unlock()
+	for _, orderId := range orderIDs {
+		if newStatus != "shipping" {
+			delete(cache.Cache.ShippingOrderProductId, orderId)
 		}
+		e := cache.Cache.OrderIdUserId[orderId]
+		cache.Cache.UserOrders[e.UserID][e.Index].ShippedStatus = newStatus
 	}
 	return nil
 }
@@ -108,12 +105,10 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
 
 	// err := r.db.SelectContext(ctx, &orders, query)
 
-	cache.Cache.ShippingOrderProductId.Mu.Lock()
-	defer func() {
-		cache.Cache.ShippingOrderProductId.Mu.Unlock()
-	}()
+	cache.Cache.Order.Lock()
+	defer cache.Cache.Order.Unlock()
 	var err error
-	orders := lo.MapToSlice(cache.Cache.ShippingOrderProductId.Values, func(k int64, v int) model.Order {
+	orders := lo.MapToSlice(cache.Cache.ShippingOrderProductId, func(k int64, v int) model.Order {
 		p := cache.Cache.ProductsById[v]
 		if p == nil {
 			err = errors.New("not found")
@@ -130,29 +125,16 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
 
 // 配送対象となる(shipping)注文の件数を取得
 func (r *OrderRepository) CountShippingOrders(ctx context.Context) (int, error) {
-	cache.Cache.ShippingOrderProductId.Mu.Lock()
-	defer cache.Cache.ShippingOrderProductId.Mu.Unlock()
-	return len(cache.Cache.ShippingOrderProductId.Values), nil
+	cache.Cache.Order.Lock()
+	defer cache.Cache.Order.Unlock()
+	return len(cache.Cache.ShippingOrderProductId), nil
 }
 
 // 注文履歴一覧を取得
 func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.ListRequest) ([]model.Order, int, error) {
-	query := `
-        SELECT order_id, product_id, shipped_status, created_at, arrived_at
-        FROM orders
-        WHERE user_id = ?
-    `
-	type orderRow struct {
-		OrderID       int          `db:"order_id"`
-		ProductID     int          `db:"product_id"`
-		ShippedStatus string       `db:"shipped_status"`
-		CreatedAt     sql.NullTime `db:"created_at"`
-		ArrivedAt     sql.NullTime `db:"arrived_at"`
-	}
-	var ordersRaw []orderRow
-	if err := r.db.SelectContext(ctx, &ordersRaw, query, userID); err != nil {
-		return nil, 0, err
-	}
+	cache.Cache.Order.Lock()
+	ordersRaw := cache.Cache.UserOrders[userID]
+	cache.Cache.Order.Unlock()
 
 	var orders []model.Order
 	for _, o := range ordersRaw {
@@ -172,14 +154,7 @@ func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.
 				}
 			}
 		}
-		orders = append(orders, model.Order{
-			OrderID:       int64(o.OrderID),
-			ProductID:     o.ProductID,
-			ProductName:   productName,
-			ShippedStatus: o.ShippedStatus,
-			CreatedAt:     o.CreatedAt.Time,
-			ArrivedAt:     o.ArrivedAt,
-		})
+		orders = append(orders, o)
 	}
 
 	switch req.SortField {
