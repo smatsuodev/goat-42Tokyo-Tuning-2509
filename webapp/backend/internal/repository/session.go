@@ -72,7 +72,7 @@ func (r *SessionRepository) Create(ctx context.Context, userBusinessID int, dura
 func (r *SessionRepository) FindUserBySessionID(ctx context.Context, sessionID string) (int, error) {
 	var userID int
 	cache.Cache.Session.Lock()
-	defer cache.Cache.Session.Lock()
+	defer cache.Cache.Session.Unlock()
 	session, ok := cache.Cache.Sessions[sessionID]
 	if !ok {
 		return 0, errors.New("session not found")
