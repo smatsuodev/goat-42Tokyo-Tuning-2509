@@ -5,8 +5,9 @@ import (
 	"backend/internal/model"
 	"context"
 	"fmt"
-	"log"
+	"runtime"
 	"strings"
+	"sync"
 )
 
 type ProductRepository struct {
@@ -33,13 +34,7 @@ func (r *ProductRepository) ListProducts(ctx context.Context, userID int, req mo
 		}
 		return products, cache.Cache.ProductsCnt, nil
 	} else {
-		products = make([]model.Product, 0, cache.Cache.ProductsCnt)
-		for _, p := range cache.Cache.ProductsById {
-			log.Printf("%v", p)
-			if strings.Contains(p.Name, req.Search) || strings.Contains(p.Description, req.Search) {
-				products = append(products, p)
-			}
-		}
+		products = SearchProducts(cache.Cache.ProductsById, req.Search)
 
 		var paged []model.Product
 		sortBy := func(less func(a, b model.Product) bool) {
@@ -125,4 +120,42 @@ func (r *ProductRepository) ListProducts(ctx context.Context, userID int, req mo
 
 		return paged, total, nil
 	}
+}
+func SearchProducts(productsById []model.Product, query string) []model.Product {
+	numWorkers := runtime.NumCPU() // 並列度をCPU数に合わせる
+	chunkSize := (len(productsById) + numWorkers - 1) / numWorkers
+
+	var wg sync.WaitGroup
+	resultCh := make(chan *model.Product, len(productsById))
+
+	for i := 0; i < len(productsById); i += chunkSize {
+		end := i + chunkSize
+		if end > len(productsById) {
+			end = len(productsById)
+		}
+		wg.Add(1)
+
+		// 部分配列を goroutine で処理
+		go func(subset []model.Product) {
+			defer wg.Done()
+			for _, p := range subset {
+				if strings.Contains(p.Name, query) || strings.Contains(p.Description, query) {
+					resultCh <- &p
+				}
+			}
+		}(productsById[i:end])
+	}
+
+	// 結果をまとめる goroutine
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
+
+	// 最終結果を収集
+	var results []model.Product
+	for p := range resultCh {
+		results = append(results, *p)
+	}
+	return results
 }
