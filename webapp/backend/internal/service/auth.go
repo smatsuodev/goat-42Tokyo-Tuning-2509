@@ -52,6 +52,7 @@ func (s *AuthService) Login(ctx context.Context, userName, password string) (str
 			return "", time.Time{}, ErrInvalidPassword
 		}
 		cache.Cache.Password[user.UserID] = sha256.Sum256([]byte(password))
+		cache.Cache.IsHashed[user.UserID] = true
 	} else {
 		if cache.Cache.Password[user.UserID] != sha256.Sum256([]byte(password)) {
 			log.Printf("[Login] パスワード検証失敗")
