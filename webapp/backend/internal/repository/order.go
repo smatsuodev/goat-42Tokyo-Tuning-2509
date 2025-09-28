@@ -4,7 +4,6 @@ import (
 	cache "backend/internal"
 	"backend/internal/model"
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -110,10 +109,6 @@ func (r *OrderRepository) GetShippingOrders(ctx context.Context) ([]model.Order,
 	var err error
 	orders := lo.MapToSlice(cache.Cache.ShippingOrderProductId, func(k int64, v int) model.Order {
 		p := cache.Cache.ProductsById[v]
-		if p == nil {
-			err = errors.New("not found")
-			return model.Order{}
-		}
 		return model.Order{
 			OrderID: k,
 			Weight:  p.Weight,
@@ -246,12 +241,9 @@ func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.
 	ordersRaw := cache.Cache.UserOrders[userID]
 	cache.Cache.Order.Unlock()
 
-	var orders []model.Order
+	orders := make([]model.Order, 0, len(ordersRaw))
 	for _, o := range ordersRaw {
 		p := cache.Cache.ProductsById[o.ProductID]
-		if p == nil {
-			return nil, 0, errors.New("product not found")
-		}
 		productName := p.Name
 		if req.Search != "" {
 			if req.Type == "prefix" {

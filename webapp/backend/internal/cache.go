@@ -11,7 +11,7 @@ import (
 
 type cache struct {
 	ProductsCnt  int
-	ProductsById []*model.Product
+	ProductsById []model.Product
 
 	Order                  sync.RWMutex
 	ShippingOrderProductId map[int64]int
@@ -51,7 +51,7 @@ func InitCache(dbConn *sqlx.DB) {
 	}
 
 	Cache = cache{
-		ProductsById:           make([]*model.Product, len(products)+1),
+		ProductsById:           make([]model.Product, len(products)+1),
 		ShippingOrderProductId: make(map[int64]int),
 		UserOrders:             make([][]model.Order, len(users)+1),
 		OrderIdUserId: make(map[int64]struct {
@@ -65,7 +65,7 @@ func InitCache(dbConn *sqlx.DB) {
 	}
 
 	for _, p := range products {
-		Cache.ProductsById[p.ProductID] = &p
+		Cache.ProductsById[p.ProductID] = p
 	}
 
 	var orders []model.Order
