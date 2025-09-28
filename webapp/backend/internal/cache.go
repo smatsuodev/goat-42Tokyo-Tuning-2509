@@ -20,6 +20,8 @@ type cache struct {
 		UserID int
 		Index  int
 	}
+	IsHashed map[int]bool
+	Password map[int][32]byte
 }
 
 var Cache cache
@@ -58,6 +60,8 @@ func InitCache(dbConn *sqlx.DB) {
 			UserID int
 			Index  int
 		}, 0),
+		IsHashed: make(map[int]bool),
+		Password: make(map[int][32]byte),
 	}
 
 	for i := range Cache.UserOrders {

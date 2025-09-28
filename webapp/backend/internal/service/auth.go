@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"log"
 	"time"
 
+	cache "backend/internal"
 	"backend/internal/repository"
 	"backend/internal/utils"
 
@@ -42,12 +44,19 @@ func (s *AuthService) Login(ctx context.Context, userName, password string) (str
 		return "", time.Time{}, ErrInternalServer
 
 	}
-
-	err = utils.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
-	if err != nil {
-		log.Printf("[Login] パスワード検証失敗: %v", err)
-		span.RecordError(err)
-		return "", time.Time{}, ErrInvalidPassword
+	if !cache.Cache.IsHashed[user.UserID] {
+		err = utils.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
+		if err != nil {
+			log.Printf("[Login] パスワード検証失敗: %v", err)
+			span.RecordError(err)
+			return "", time.Time{}, ErrInvalidPassword
+		}
+		cache.Cache.Password[user.UserID] = sha256.Sum256([]byte(password))
+	} else {
+		if cache.Cache.Password[user.UserID] != sha256.Sum256([]byte(password)) {
+			log.Printf("[Login] パスワード検証失敗")
+			return "", time.Time{}, ErrInvalidPassword
+		}
 	}
 
 	sessionDuration := 24 * time.Hour
