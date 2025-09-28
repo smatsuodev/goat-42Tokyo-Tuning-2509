@@ -237,9 +237,9 @@ func PageStable[T any](arr []T, less func(a, b T) bool, page, L int) []T {
 
 // 注文履歴一覧を取得
 func (r *OrderRepository) ListOrders(ctx context.Context, userID int, req model.ListRequest) ([]model.Order, int, error) {
-	cache.Cache.Order.Lock()
+	cache.Cache.Order.RLock()
 	ordersRaw := cache.Cache.UserOrders[userID]
-	cache.Cache.Order.Unlock()
+	cache.Cache.Order.RUnlock()
 
 	orders := make([]model.Order, 0, len(ordersRaw))
 	for _, o := range ordersRaw {
